@@ -1,63 +1,41 @@
-
 #include <Adafruit_MPL115A2.h>
 #include <SparkFunTSL2561.h>
 #include <Wire.h>
 #include <SoftwareSerial.h>
 
 //period between posts, set at 60 seconds
-#define DELAY_PERIOD 60000
-
+#define DELAY_PERIOD 3600000
 // Important!! We use pin 13 for enable esp8266  
 #define WIFI_ENABLE_PIN 13
-
 #define SSID "Jarvis"
 #define PASS "$(SivRaj)$"
 
-// Create an SFE_TSL2561 object, here called "light":
-//Create an MPL115A2 pressure object
-
 SFE_TSL2561 light;
 Adafruit_MPL115A2 mpl115a2;
-
 //Hardware pin definitions
-int UVOUT = A0; //Output from the sensor
+int UVOUT = A1; //Output from the sensor
 int REF_3V3 = A1; //3.3V power on the Arduino board
-//const int lightLEDpin=12;
-//const int tempLEDpin=11;
-//const int UVLEDpin=10;
-
 int lightState;
 int tempState;
 int UVstate;
 int temp = 0;
 int test;
-
-
 // Global variables:
-
 boolean gain;     // Gain setting, 0 = X1, 1 = X16;
 unsigned int ms;  // Integration ("shutter") time in milliseconds
-
 char serialbuffer[100];//serial buffer for request command
 long nextTime;//next time in millis that the temperature read will fire
 int wifiConnected = 0;
-
 SoftwareSerial mySerial(11, 12); // rx, tx
 
 void setup()
 {
   // Initialize the Serial port:
-  
   mySerial.begin(9600);//connection to ESP8266
-  
   Serial.begin(9600);
   Serial.println("Initializing measurements...");
-
   pinMode(UVOUT, INPUT);
   pinMode(REF_3V3, INPUT);
-  //pinMode(lightLEDpin,OUTPUT);
-  //pinMode(tempLEDpin,OUTPUT);
-  //pinMode(UVLEDpin,OUTPUT);
 
   light.begin();
   mpl115a2.begin();
@@ -165,83 +143,51 @@ void loop()
 
       //reset timer
       nextTime = millis() + DELAY_PERIOD;
-    
-    lightMeasure();       //call lightMeasure function to measure and display lux value on serial monitor
- 
-    pressureMeasure();    //call pressureMeasure function to measure and display temperature and pressure on serial monitor
-
-    UVMeasure();              //call UVmeasure function to measure UV intesity and display on serial monitor
-
-    delay(1000);  //delay serial output for convenience
-   
+      SendData(tempMeasure(), lightMeasure(), pressureMeasure(), UVMeasure());
+      delay(1000);  //delay serial output for convenience
     } 
     
 }
 
-void lightMeasure(){
+float tempMeasure() {
+  return mpl115a2.getTemperature();
+}  
+
+double lightMeasure(){
   unsigned int data0, data1;
-  
   if (light.getData(data0,data1))
   {
     double lux;    // Resulting lux value
     boolean good;  // True if neither sensor is saturated
-    
-    good = light.getLux(gain,ms,data0,data1,lux);
-    
-    
-    Serial.print("Lux: ");
-    Serial.print(lux);
-    
-    if (good) Serial.println(" (good)"); else Serial.println(" (BAD)");
-
-    if(lux<=100) lightState=HIGH;
-    else lightState=LOW;
+    good = light.getLux(gain,ms,data0,data1,lux); 
+    return lux;
   }
   else
   {
-    
     byte error = light.getError();
     printError(error);
+    return 0.0;
   } 
 }
 
 
-void pressureMeasure(){
-  
-  float pressureKPA = 0, temperatureC = 0;    
-
+float pressureMeasure(){
+  float pressureKPA = 0;    
   pressureKPA = mpl115a2.getPressure();  
-  Serial.print("Pressure: "); Serial.print(pressureKPA, 4); Serial.println(" kPa");
-
-  temperatureC = mpl115a2.getTemperature();  
-  Serial.print("Temperature: "); Serial.print(temperatureC, 1); Serial.println(" *C");
-
-  if(temperatureC<=35) tempState=HIGH;
-  else tempState=LOW;
-  
+  return pressureKPA;
 }
 
 
 
-void UVMeasure()
+float UVMeasure()
 {
   int uvLevel = averageAnalogRead(UVOUT);
   int refLevel = averageAnalogRead(REF_3V3);
-  
   //Use the 3.3V power pin as a reference to get a very accurate output value from sensor
   float outputVoltage = 3.3 / refLevel * uvLevel;
-  
   float uvIntensity = mapfloat(outputVoltage, 0.99, 2.8, 0.0, 15.0); //Convert the voltage to a UV intensity level
 
-  Serial.print("UV Intensity (mW/cm^2): ");
-  Serial.print(uvIntensity);
-
-  if(uvIntensity<6) UVstate=HIGH;
-  else UVstate=LOW;
-  
-  Serial.println();
-  Serial.println(" ");
-  
+  return uvIntensity;
 }
 
 //Takes an average of readings on a given pin
@@ -264,10 +210,6 @@ float mapfloat(float x, float in_min, float in_max, float out_min, float out_max
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-
-
-
-
 
 void printError(byte error)
   // If there's an I2C error, this function will
@@ -299,8 +241,8 @@ void printError(byte error)
   }
 }
 
-//web request needs to be sent without the http for now, https still needs some working
-void SendTempData(float temperature){
+// web request needs to be sent without the http for now, https still needs some working
+void SendData(float temperature, double lux, float pressure, float uv){
  char temp[10];
 
  Serial.print("temp: ");     
@@ -322,11 +264,17 @@ void SendTempData(float temperature){
  
  //create the request command
  String sendcommand = "GET /input/"; 
- //sendcommand.concat(PUBLIC_KEY);
+ sendcommand.concat("dZ65WApDYmiA6O7aJZM8");
  sendcommand.concat("?private_key=");
- //sendcommand.concat(PRIVATE_KEY);
- sendcommand.concat("&temp=");
+ sendcommand.concat("eEKv0lazDqh4jNA9KRom");
+ sendcommand.concat("&temperature=");
  sendcommand.concat(String(temp));
+ sendcommand.concat("&lux=");
+ sendcommand.concat(String(lux));
+ sendcommand.concat("&pressure=");
+ sendcommand.concat(String(pressure));
+ sendcommand.concat("&uv_intensity=");
+ sendcommand.concat(String(uv));
  sendcommand.concat("\r\n");
  //sendcommand.concat(" HTTP/1.0\r\n\r\n");
  
@@ -355,5 +303,4 @@ void SendTempData(float temperature){
  mySerial.print(sendcommand);
  delay(1000);
  mySerial.println("AT+CIPCLOSE");
-}
-
+} 
