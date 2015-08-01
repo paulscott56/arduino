@@ -4,11 +4,11 @@
 #include <SoftwareSerial.h>
 
 //period between posts, set at 60 seconds
-#define DELAY_PERIOD 3600000
+#define DELAY_PERIOD 60000
 // Important!! We use pin 13 for enable esp8266  
 #define WIFI_ENABLE_PIN 13
-#define SSID "Jarvis"
-#define PASS "$(SivRaj)$"
+#define SSID "SCOTTHOME"
+#define PASS "DADCDC1510"
 
 SFE_TSL2561 light;
 Adafruit_MPL115A2 mpl115a2;
@@ -251,7 +251,7 @@ void SendData(float temperature, double lux, float pressure, float uv){
  dtostrf(temperature,1,2,temp);
 
  //create start command
- String startcommand = "AT+CIPSTART=\"TCP\",\"data.sparkfun.com\", 80";
+ String startcommand = "AT+CIPSTART=\"TCP\",\"192.168.0.13\", 9999";
  
  mySerial.println(startcommand);
  Serial.println(startcommand);
@@ -264,9 +264,9 @@ void SendData(float temperature, double lux, float pressure, float uv){
  
  //create the request command
  String sendcommand = "GET /input/"; 
- sendcommand.concat("dZ65WApDYmiA6O7aJZM8");
+ sendcommand.concat("bBPeY1Mg93fgqeAo3eKOfZaAd8D");
  sendcommand.concat("?private_key=");
- sendcommand.concat("eEKv0lazDqh4jNA9KRom");
+ sendcommand.concat("GwQ3jLKO4lhpA90l49xvCjvYdzP");
  sendcommand.concat("&temperature=");
  sendcommand.concat(String(temp));
  sendcommand.concat("&lux=");
